@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>업체내방일정 관리 시스템</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        :root {
+            --cat-tfs: #ffccd5; --cat-hht: #d8f3dc; --cat-gemini: #e8dbfc; --cat-service: #bde0fe;
+        }
+        body { font-family: 'Inter', -apple-system, sans-serif; background-color: #f8fafc; color: #1e293b; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); min-width: 700px; }
+        .calendar-cell { min-height: 120px; transition: background-color 0.2s; }
+        .calendar-cell:hover { background-color: #f1f5f9; }
+        .event-item {
+            font-size: 0.75rem; padding: 4px 8px; margin-bottom: 4px; border-radius: 6px; cursor: pointer;
+            transition: all 0.2s; border-left: 4px solid rgba(0,0,0,0.1); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+        }
+        .event-item:hover { transform: translateY(-1px); filter: brightness(0.95); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .cat-tfs { background-color: var(--cat-tfs); }
+        .cat-hht { background-color: var(--cat-hht); }
+        .cat-gemini { background-color: var(--cat-gemini); }
+        .cat-service { background-color: var(--cat-service); }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-[1600px] mx-auto">
+        <header class="flex justify-between items-center mb-8 pb-6 border-b border-slate-200">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-800 tracking-tight">업체내방일정 (n8n 연동형)</h1>
+                <p class="text-slate-500 mt-1">자동화 워크플로우 기반 실시간 협업 스케줄러</p>
+            </div>
+            <div id="currentTime" class="text-lg font-semibold text-slate-600"></div>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <aside class="lg:col-span-1 space-y-6">
+                <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <span class="w-2 h-5 bg-slate-800 rounded-full"></span>신규 일정 등록
+                    </h2>
+                    <form id="scheduleForm" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1">날짜</label>
+                            <input type="date" id="eventDate" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none" required>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 mb-1">시작</label>
+                                <select id="startTime" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none"></select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-slate-500 mb-1">종료</label>
+                                <select id="endTime" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none"></select>
+                            </div>
+                        </div>
+                        <hr class="my-4 border-slate-100">
+                        <div class="space-y-3">
+                            <div class="category-field">
+                                <label class="flex items-center gap-2 text-xs font-bold text-slate-600 mb-1"><span class="w-2 h-2 rounded-full cat-tfs"></span> TFS</label>
+                                <input type="text" id="inputTfs" placeholder="내용 입력 시 등록" class="w-full p-2 bg-slate-50 border border-slate-100 rounded-lg text-sm outline-none">
+                            </div>
+                            <div class="category-field">
+                                <label class="flex items-center gap-2 text-xs font-bold text-slate-600 mb-1"><span class="w-2 h-2 rounded-full cat-hht"></span> HHT</label>
+                                <input type="text" id="inputHht" placeholder="내용 입력 시 등록" class="w-full p-2 bg-slate-50 border border-slate-100 rounded-lg text-sm outline-none">
+                            </div>
+                            <div class="category-field">
+                                <label class="flex items-center gap-2 text-xs font-bold text-slate-600 mb-1"><span class="w-2 h-2 rounded-full cat-gemini"></span> Gemini</label>
+                                <input type="text" id="inputGemini" placeholder="내용 입력 시 등록" class="w-full p-2 bg-slate-50 border border-slate-100 rounded-lg text-sm outline-none">
+                            </div>
+                            <div class="category-field">
+                                <label class="flex items-center gap-2 text-xs font-bold text-slate-600 mb-1"><span class="w-2 h-2 rounded-full cat-service"></span> 서비스</label>
+                                <input type="text" id="inputService" placeholder="내용 입력 시 등록" class="w-full p-2 bg-slate-50 border border-slate-100 rounded-lg text-sm outline-none">
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700 transition-all mt-4">일정 일괄 등록</button>
+                    </form>
+                </section>
+                
+                <section class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-semibold mb-4 flex items-center gap-2"><span class="w-2 h-5 bg-slate-400 rounded-full"></span>카테고리 필터</h2>
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-3 p-2 hover:bg-slate-50 rounded-lg cursor-pointer"><input type="checkbox" id="filterAll" checked class="w-4 h-4 rounded text-slate-800"> <span class="text-sm font-medium">전체 보기</span></label>
+                        <div id="filterList" class="space-y-1 pl-2 border-l-2 border-slate-100 ml-2"></div>
+                    </div>
+                </section>
+            </aside>
+
+            <section class="lg:col-span-3 bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <div class="flex items-center gap-4">
+                        <button id="btnPrev" class="p-2 hover:bg-white rounded-full border hover:border-slate-200">←</button>
+                        <h3 id="labelMonthYear" class="text-xl font-bold text-slate-800 min-w-[140px] text-center"></h3>
+                        <button id="btnNext" class="p-2 hover:bg-white rounded-full border hover:border-slate-200">→</button>
+                    </div>
+                    <button id="btnToday" class="px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium hover:bg-slate-50">오늘</button>
+                </div>
+                <div class="calendar-grid bg-slate-200 gap-[1px]">
+                    <div class="bg-slate-50 py-3 text-center text-xs font-bold text-slate-500 uppercase">Sun</div>
+                    <div class="bg-slate-50 py-3 text-center text-xs font-bold text-slate-500 uppercase">Mon</div>
+                    <div class="bg-slate-50 py-3 text-center text-xs font-bold text-slate-500 uppercase">Tue</div>
+                    <div class="bg-slate-50 py-3 text-center text-xs font-bold text-slate-500 uppercase">Wed</div>
+                    <div class="bg-slate-50 py-3 text-center text-xs font-bold text-slate-500 uppercase">Thu</div>
+                    <div class="bg-slate-50 py-3 text-center text-xs font-bold text-slate-500 uppercase">Fri</div>
+                    <div class="bg-slate-50 py-3 text-center text-xs font-bold text-slate-500 uppercase">Sat</div>
+                </div>
+                <div id="calendarBody" class="calendar-grid bg-slate-200 gap-[1px]"></div>
+            </section>
+        </main>
+    </div>
+
+    <div id="editModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center hidden opacity-0 transition-all duration-300">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden transform scale-95 transition-all">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-xl font-bold text-slate-800">일정 상세 수정</h3>
+                <button id="closeModal" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+            <div class="p-6 space-y-4">
+                <input type="hidden" id="editEventId">
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">날짜</label>
+                    <input type="date" id="editEventDate" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">시작 시간</label>
+                        <select id="editStartTime" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 mb-1">종료 시간</label>
+                        <select id="editEndTime" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none"></select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">카테고리</label>
+                    <select id="editCategory" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none">
+                        <option value="TFS">TFS</option><option value="HHT">HHT</option><option value="Gemini">Gemini</option><option value="서비스">서비스</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 mb-1">내용</label>
+                    <textarea id="editContent" rows="3" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg outline-none text-sm"></textarea>
+                </div>
+            </div>
+            <div class="p-6 bg-slate-50 flex gap-3">
+                <button id="btnDeleteEvent" class="flex-1 py-3 bg-red-50 text-red-600 rounded-xl font-bold hover:bg-red-100">삭제</button>
+                <button id="btnSaveEdit" class="flex-[2] py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-700">수정 사항 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // http://localhost:5678/webhook/company-schedule
+        const N8N_WEBHOOK_URL = "https://your-n8n-instance.com/webhook/company-schedule";
+
+        let currentYearMonth = new Date();
+        let events = [];
+        let enabledCategories = ['TFS', 'HHT', 'Gemini', '서비스'];
+        const categories = {
+            'TFS': { color: 'cat-tfs', label: 'TFS' }, 'HHT': { color: 'cat-hht', label: 'HHT' },
+            'Gemini': { color: 'cat-gemini', label: 'Gemini' }, '서비스': { color: 'cat-service', label: '서비스' }
+        };
+
+        const calendarBody = document.getElementById('calendarBody');
+        const labelMonthYear = document.getElementById('labelMonthYear');
+        const scheduleForm = document.getElementById('scheduleForm');
+        const filterList = document.getElementById('filterList');
+        const filterAll = document.getElementById('filterAll');
+        const editModal = document.getElementById('editModal');
+
+        async function init() {
+            setupTimeSelects();
+            renderFilters();
+            await fetchEvents(); 
+            updateClock();
+            setInterval(updateClock, 1000);
+            document.getElementById('eventDate').valueAsDate = new Date();
+            
+            document.getElementById('btnPrev').onclick = () => { currentYearMonth.setMonth(currentYearMonth.getMonth() - 1); renderCalendar(); };
+            document.getElementById('btnNext').onclick = () => { currentYearMonth.setMonth(currentYearMonth.getMonth() + 1); renderCalendar(); };
+            document.getElementById('btnToday').onclick = () => { currentYearMonth = new Date(); renderCalendar(); };
+            document.getElementById('closeModal').onclick = closeModal;
+            document.getElementById('btnSaveEdit').onclick = saveEdit;
+            document.getElementById('btnDeleteEvent').onclick = deleteEvent;
+            
+            filterAll.onchange = (e) => {
+                const checked = e.target.checked;
+                document.querySelectorAll('.cat-filter').forEach(cb => cb.checked = checked);
+                enabledCategories = checked ? Object.keys(categories) : [];
+                renderCalendar();
+            };
+        }
+
+        // --- n8n 통신 통합 핵심 엔진 ---
+        async function requestN8N(payload) {
+            try {
+                const response = await fetch(N8N_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                return await response.json();
+            } catch (error) {
+                console.error("n8n 통신 오류:", error);
+                return null;
+            }
+        }
+
+        async function fetchEvents() {
+            const res = await requestN8N({ action: "fetch" });
+            if (res && res.events) {
+                events = res.events;
+            } else {
+                // n8n 연결 전 테스트용 가짜 데이터 바인딩
+                events = JSON.parse(localStorage.getItem('company_visit_events')) || [];
+            }
+            renderCalendar();
+        }
+
+        scheduleForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const date = document.getElementById('eventDate').value;
+            const start = document.getElementById('startTime').value;
+            const end = document.getElementById('endTime').value;
+            if (start > end) { alert("종료 시간 오류"); return; }
+            
+            const entries = [
+                { cat: 'TFS', val: document.getElementById('inputTfs').value },
+                { cat: 'HHT', val: document.getElementById('inputHht').value },
+                { cat: 'Gemini', val: document.getElementById('inputGemini').value },
+                { cat: '서비스', val: document.getElementById('inputService').value }
+            ].filter(e => e.val.trim() !== "");
+
+            if (entries.length === 0) { alert("입력 정보 없음"); return; }
+
+            const newItems = entries.map(entry => ({
+                id: (Date.now() + Math.random()).toString(),
+                date: date, startTime: start, endTime: end, category: entry.cat, content: entry.val
+            }));
+
+            // n8n에 일괄 등록 요청
+            await requestN8N({ action: "insert", data: newItems });
+            
+            // 로컬 fallback 동기화 후 새로고침
+            if(!isN8NConnected()) { events.push(...newItems); localStorage.setItem('company_visit_events', JSON.stringify(events)); }
+            await fetchEvents();
+            scheduleForm.reset();
+            document.getElementById('eventDate').valueAsDate = new Date();
+        };
+
+        async function saveEdit() {
+            const payload = {
+                id: document.getElementById('editEventId').value,
+                date: document.getElementById('editEventDate').value,
+                startTime: document.getElementById('editStartTime').value,
+                endTime: document.getElementById('editEndTime').value,
+                category: document.getElementById('editCategory').value,
+                content: document.getElementById('editContent').value
+            };
+            if (payload.startTime > payload.endTime) { alert("시간 오류"); return; }
+
+            await requestN8N({ action: "update", data: payload });
+            
+            if(!isN8NConnected()) {
+                const idx = events.findIndex(e => e.id === payload.id);
+                if(idx !== -1) events[idx] = payload;
+                localStorage.setItem('company_visit_events', JSON.stringify(events));
+            }
+            await fetchEvents();
+            closeModal();
+        }
+
+        async function deleteEvent() {
+            if (!confirm('삭제하시겠습니까?')) return;
+            const id = document.getElementById('editEventId').value;
+
+            await requestN8N({ action: "delete", id: id });
+
+            if(!isN8NConnected()) {
+                events = events.filter(e => e.id !== id);
+                localStorage.setItem('company_visit_events', JSON.stringify(events));
+            }
+            await fetchEvents();
+            closeModal();
+        }
+
+        function isN8NConnected() { return N8N_WEBHOOK_URL !== "https://your-n8n-instance.com/webhook/company-schedule"; }
+
+        // --- UI Helper Logic (기존 유지) ---
+        function setupTimeSelects() {
+            const selects = ['startTime', 'endTime', 'editStartTime', 'editEndTime'];
+            selects.forEach(id => {
+                const el = document.getElementById(id);
+                for (let h = 0; h < 24; h++) {
+                    for (let m of ['00', '30']) {
+                        const time = `${String(h).padStart(2, '0')}:${m}`;
+                        el.add(new Option(time, time));
+                    }
+                }
+            });
+            document.getElementById('startTime').value = "09:00"; document.getElementById('endTime').value = "10:00";
+        }
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' });
+        }
+        function renderFilters() {
+            filterList.innerHTML = Object.entries(categories).map(([key, val]) => `
+                <label class="flex items-center gap-3 p-1 hover:bg-slate-50 rounded-md cursor-pointer text-sm">
+                    <input type="checkbox" checked value="${key}" class="cat-filter w-3.5 h-3.5 rounded text-slate-800">
+                    <span class="w-2 h-2 rounded-full ${val.color}"></span><span>${val.label}</span>
+                </label>
+            `).join('');
+            document.querySelectorAll('.cat-filter').forEach(cb => {
+                cb.onchange = () => {
+                    enabledCategories = Array.from(document.querySelectorAll('.cat-filter:checked')).map(c => c.value);
+                    filterAll.checked = enabledCategories.length === Object.keys(categories).length;
+                    renderCalendar();
+                };
+            });
+        }
+        function renderCalendar() {
+            calendarBody.innerHTML = '';
+            const year = currentYearMonth.getFullYear(); const month = currentYearMonth.getMonth();
+            labelMonthYear.textContent = `${year}년 ${month + 1}월`;
+            const firstDay = new Date(year, month, 1).getDay();
+            const lastDate = new Date(year, month + 1, 0).getDate();
+            const prevLastDate = new Date(year, month, 0).getDate();
+
+            for (let i = firstDay; i > 0; i--) createCell(prevLastDate - i + 1, 'text-slate-300 bg-slate-50/50', null);
+            for (let d = 1; d <= lastDate; d++) {
+                const isToday = new Date().getFullYear() === year && new Date().getMonth() === month && new Date().getDate() === d;
+                createCell(d, isToday ? 'bg-slate-50/80 font-bold' : 'bg-white', `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`, isToday);
+            }
+            const remaining = (7 - ((firstDay + lastDate) % 7)) % 7;
+            for (let i = 1; i <= remaining; i++) createCell(i, 'text-slate-300 bg-slate-50/50', null);
+        }
+        function createCell(day, bgClass, dateStr, isToday) {
+            const cell = document.createElement('div'); cell.className = `calendar-cell p-2 border-slate-200 relative ${bgClass}`;
+            const label = document.createElement('span'); label.className = `text-sm mb-2 inline-block ${isToday ? 'w-7 h-7 bg-slate-800 text-white rounded-full flex items-center justify-center' : ''}`;
+            label.textContent = day; cell.appendChild(label);
+            if (dateStr) {
+                events.filter(e => e.date === dateStr && enabledCategories.includes(e.category))
+                      .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                      .forEach(ev => {
+                          const evDiv = document.createElement('div'); evDiv.className = `event-item ${categories[ev.category].color}`;
+                          evDiv.innerHTML = `<span class="font-bold opacity-70 text-[10px] mr-1">${ev.startTime}</span> ${ev.category}: ${ev.content}`;
+                          evDiv.onclick = (e) => { e.stopPropagation(); openEditModal(ev); };
+                          cell.appendChild(evDiv);
+                      });
+            }
+            calendarBody.appendChild(cell);
+        }
+        function openEditModal(ev) {
+            document.getElementById('editEventId').value = ev.id; document.getElementById('editEventDate').value = ev.date;
+            document.getElementById('editStartTime').value = ev.startTime; document.getElementById('editEndTime').value = ev.endTime;
+            document.getElementById('editCategory').value = ev.category; document.getElementById('editContent').value = ev.content;
+            editModal.classList.remove('hidden'); setTimeout(() => { editModal.classList.remove('opacity-0'); editModal.querySelector('div').classList.remove('scale-95'); }, 10);
+        }
+        function closeModal() { editModal.classList.add('opacity-0'); editModal.querySelector('div').classList.add('scale-95'); setTimeout(() => editModal.classList.add('hidden'), 300); }
+        window.onload = init;
+    </script>
+</body>
+</html>
